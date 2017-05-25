@@ -43,9 +43,9 @@ namespace Bzr2Git4Notes
         public static string timeZoneOffset
         {
             get
-            {		    
+            {
                 var offset = DateTimeOffset.Now.Offset.TotalHours;
-                return String.Format("{0}00", offset.ToString("+00;-00"));		 
+                return String.Format("{0}00", offset.ToString("+00;-00"));
             }
         }
     }
@@ -53,9 +53,7 @@ namespace Bzr2Git4Notes
     public class LineReader : BinaryReader
     {
         public LineReader(Stream stream)
-			: base(stream, Encoding.UTF8)
-        {
-        }
+			: base(stream, Encoding.UTF8) { }
 
         static readonly byte[] newline = Encoding.ASCII.GetBytes("\n");
 
@@ -78,10 +76,11 @@ namespace Bzr2Git4Notes
             }
         }
     }
+
     // bzr-specific
     // the parsed branch id and nick, provided by 'property branch-nick id nick' command
     class BranchName
-    {    
+    {
         public BranchName(string s)
         {
             string[] arr = s.Split(new char [] { ' ' });
@@ -97,6 +96,7 @@ namespace Bzr2Git4Notes
         // the parsed nick
         public string nick;
     }
+
     // the parsed author name and email
     class Author
     {
@@ -113,6 +113,7 @@ namespace Bzr2Git4Notes
         // author email
         public string email;
     }
+
     // the parsed tag information, provided by 'reset' command
     class Tag
     {
@@ -121,6 +122,7 @@ namespace Bzr2Git4Notes
         // the fromId from 'from :fromId' command, related to this tag
         public int fromId;
     }
+
     // unused
     class Rename
     {
@@ -128,13 +130,13 @@ namespace Bzr2Git4Notes
 
         public string NewName { get; set; }
     }
+
     // Represents bzr branch.
     class Branch
     {
         public Branch()
         {
             childBranches = new List<Branch>();
-            rank = -1;
             nodeCount = 0;
             isTrunk = false;
         }
@@ -158,16 +160,17 @@ namespace Bzr2Git4Notes
         public string name { get { return end.branchName; } }
         // The first branch node.
         public Node begin;
-        // The last branch node. For non-trunk branches 
+        // The last branch node. For non-trunk branches
         // it is merged to another(usually parent) branch.
         public Node end;
         // branches directly forked from the current branch
         public List<Branch> childBranches;
-        public int rank;
+        // number of nodes in this branch
         public int nodeCount;
         public bool isTrunk;
     }
-    // A node of bzr revisions tree.
+
+    // A node of bzr revision tree.
     abstract class Node
     {
         public Node()
@@ -176,20 +179,13 @@ namespace Bzr2Git4Notes
             mergesFrom = new List<Node>();
         }
         // whether one or more branches started from this node
-        public bool branched()
-        {
-            return nexts.Count > 1;
-        }
+        public bool branched() { return nexts.Count > 1; }
+
         // whether this node is the result of merge from one or more branches
-        public bool merged()
-        {
-            return mergesFrom.Count > 0;
-        }
+        public bool merged() { return mergesFrom.Count > 0; }
+
         // whether this node is the last node for a branch
-        public bool finished()
-        {
-            return nexts.Count() == 0;
-        }
+        public bool finished() { return nexts.Count() == 0; }
 
         public void addBranch(Branch branch)
         {
@@ -197,6 +193,7 @@ namespace Bzr2Git4Notes
                 derivedBranches = new List<Branch>();
             derivedBranches.Add(branch);
         }
+
         // calculates three-number revision numbers for
         // branches, started from this node.
         public void setDerivedRevisions(int trunkRevNo)
@@ -209,20 +206,18 @@ namespace Bzr2Git4Notes
             {
                 var nestedBranches = new List<Branch>();
                 nestedBranches.Add(branch);
-                branch.allChildren(ref nestedBranches);        
+                branch.allChildren(ref nestedBranches);
                 foreach (var nestedBranch in nestedBranches)
                 {
                     if (!allBranches.ContainsKey(nestedBranch.begin.id))
-                        allBranches.Add(nestedBranch.begin.id, nestedBranch);                    
+                        allBranches.Add(nestedBranch.begin.id, nestedBranch);
                 }
             }
 
             int rank = 1;
-
             foreach (var branchPair in allBranches)
             {
                 int nodePosition = branchPair.Value.nodeCount;
-                branchPair.Value.rank = rank;
                 var node = branchPair.Value.end;
 
                 while (node != branchPair.Value.begin)
@@ -253,16 +248,23 @@ namespace Bzr2Git4Notes
 
         public string revision { get { return theRevision; } }
 
+        // List of nodes, having this node as a parent.
+        // Contains > 1 elements if this node is a root for one or more branches.
         public List<Node> nexts;
+        // Corresponds to id in 'from :id' command from bzr export stream.
         public Node prev;
+        // list of nodes merged into this node
         public List<Node> mergesFrom;
+        // a node this node was merged to
         public Node mergeTo;
-        public Branch branch;
         // a branch this node belongs to
+        public Branch branch;
         // Calculated bzr revision, e.g., 'r8881' or 'r8881.2.2'.
         string theRevision;
+        // list of branches forked from this node
         List<Branch> derivedBranches;
     }
+
     // Parsed 'commit' command information from bzr fast-export stream.
     class Commit : Node
     {
@@ -314,8 +316,7 @@ namespace Bzr2Git4Notes
         // the parsed mergeId from 'merge :mergeId' command
         public int mergeMarkId;
         // the parsed committer info(including email and date) from 'committer committer_info' command
-        public string committer;
-        // unused
+        public string committer; // unused
         // the parsed bug_info from 'property bugs bug_info' bzr-specific command
         public string bug;
         // the parsed bzr-specific 'property branch-nick ...' command
@@ -323,15 +324,12 @@ namespace Bzr2Git4Notes
         // commit authors from parsed 'author ...' commands
         public List<Author> authors;
         static readonly string notesCommitMessage = "generating notes from bzr metadata";
-        public List<Rename> renames;
-        // unused
-        public List<string> deletes;
-        // unused
-        public List<string> dirs;
-        // unused   
-        public List<Tag> tags;
-        // unused
+        public List<Rename> renames; // unused
+        public List<string> deletes; // unused
+        public List<string> dirs; // unused
+        public List<Tag> tags; // unused
     }
+
     // bzr 'fast-export --no-plain' to 'git fast-import' adapter.
     // Extacts some meta-inforation from bzr output (such as authors
     // and revision number) and transforms it into git notes data.
@@ -339,8 +337,8 @@ namespace Bzr2Git4Notes
     {
         public Adapter()
         {
-            StoreList = new List<Commit>();			
             theBranchList = new List<Branch>();
+            StoreList = new List<Commit>();
             branchNameDict = new SortedDictionary<string, int>();
         }
         #region === public methods ===
@@ -361,7 +359,7 @@ namespace Bzr2Git4Notes
         // For example, bzr properties and directory-creating commands are removed
         // from the input stream.
         void AdaptInputStream(string inputFname)
-        {           
+        {
             var stream = string.IsNullOrEmpty(inputFname) ? Console.OpenStandardInput() : File.OpenRead(inputFname);
             using (LineReader inputStream = new LineReader(stream))
             {
@@ -369,7 +367,7 @@ namespace Bzr2Git4Notes
                 Tag tag = null;
                 string s = null;
                 while ((s = inputStream.ReadLine()) != null)
-                {			
+                {
                     if (s.StartsWith("feature "))
                     {
                         // skip branch-specific
@@ -378,7 +376,7 @@ namespace Bzr2Git4Notes
                     {
                         if (commit != null)
                         {
-                            addCommit(commit);
+                            StoreList.Add(commit);
                             commit = null;
                         }
                         if (s.StartsWith("reset refs/tags/"))
@@ -391,7 +389,7 @@ namespace Bzr2Git4Notes
                     else if (s.StartsWith("commit "))
                     {
                         if (commit != null)
-                            addCommit(commit);								
+                            StoreList.Add(commit);
                         commit = new Commit();
                         WriteLine(s);
                     }
@@ -419,7 +417,7 @@ namespace Bzr2Git4Notes
                         int dataLength = RemainderToInt(s, "data ");
                         WriteLine(s);
                         var buffer = ReadDataBlock(inputStream, dataLength);
-                        outputStream.Write(buffer, 0, buffer.Length);							
+                        outputStream.Write(buffer, 0, buffer.Length);
                     }
                     else if (s.StartsWith("from :"))
                     {
@@ -434,8 +432,8 @@ namespace Bzr2Git4Notes
                             tag = null;
                         }
                         else
-                        {                             
-                            ThrowIfNull(commit, s);                             
+                        {
+                            ThrowIfNull(commit, s);
                             commit.fromMarkId = id;
                             commit.prev = fromCommit;
                             fromCommit.nexts.Add(commit);
@@ -484,14 +482,14 @@ namespace Bzr2Git4Notes
                             rename.NewName = newName;
                             commit.renames.Add(rename);
                             WriteLine(s);
-                        }						
+                        }
                     }
                     else if (s.StartsWith("D "))
                     {
                         ThrowIfNull(commit, s);
                         var name = Remainder(s, "D ");
-                        if (!dirs.Contains(name))                            
-                            WriteLine(s);                             
+                        if (!dirs.Contains(name))
+                            WriteLine(s);
                     }
                     else if (s.StartsWith("M "))
                     {
@@ -504,19 +502,19 @@ namespace Bzr2Git4Notes
                     else if (s.StartsWith("data "))
                     {
                         int dataLength = RemainderToInt(s, "data ");
-                        WriteLine(s);                           
+                        WriteLine(s);
                         var data = ReadDataBlockAsString(inputStream, dataLength);
                         WriteLine(data);
                     }
                     else
                     {
                         // write as-is by default
-                        WriteLine(s);					
+                        WriteLine(s);
                     }
                 }
                 if (commit != null)
-                    addCommit(commit);
-            }		
+                    StoreList.Add(commit);
+            }
         }
         // write note information for all commits
         void ApplyNotes()
@@ -553,7 +551,7 @@ namespace Bzr2Git4Notes
         {
             // fill all trunk names first (e.g., 'HEAD', 'trunk', 'TRUNK', etc.)
             for (Node node = StoreList.Last(); node != null; node = node.prev)
-            {   
+            {
                 if (!branchNameDict.ContainsKey(node.branchName))
                     branchNameDict.Add(node.branchName, 1);
             }
@@ -568,16 +566,19 @@ namespace Bzr2Git4Notes
                     SortedDictionary<int, string> idDict = new SortedDictionary<int, string>();
                     foreach (var aBranchNode in node.nexts)
                     {
-                        if (aBranchNode.branchName != node.branchName)                        
+                        if (aBranchNode.branchName != node.branchName)
                             idDict.Add(aBranchNode.id, aBranchNode.branchName);
                     }
                     curLevel++;
                     foreach (var p in idDict)
                     {
-                        // Skip processing branches with repeated names, because there is not enough
-                        // information for this yet. This is not unusual for Squid bzr repository,
-                        // e.g., are several auxillary 'trunk' branches forked from the genuine 'trunk' 
-                        // branch. Such branches are processed later, at TraverseBranches().
+                        // Skip processing branches with duplicated names (for
+                        // now), because there is not enough information for
+                        // this yet. There are many such 'duplicated' branches
+                        // in Squid bzr history, e.g., several auxiliary 'trunk'
+                        // branches were forked from the genuine 'trunk'. These
+                        // special cases are processed later, at
+                        // TraverseBranches().
                         if (branchNameDict.ContainsKey(p.Value))
                         {
                             LogWriter.Log(String.Format("duplicated branch {0}", p.Value));
@@ -592,12 +593,14 @@ namespace Bzr2Git4Notes
                     // skip the first node
                     if (node.prev == null)
                         continue;
-                    // There are several strange situations, when a branch name was changed
-                    // between two adjacent commits.
-                    // For example, it changed from 'squid-autoconf-refactor' to 'autoconf-refactor'
-                    // between r10147.1.21..r10147.1.22 and from 'memcache' to 'memcache-controls'
-                    // between r9859.1.11..r9859.1.12.
-                    // Adjust these branch names to correspond to the the same level.
+
+                    // There are several strange situations, when a branch name
+                    // was changed between two adjacent commits.  For example,
+                    // it changed from 'squid-autoconf-refactor' to
+                    // 'autoconf-refactor' between r10147.1.21..r10147.1.22 and
+                    // from 'memcache' to 'memcache-controls' between
+                    // r9859.1.11..r9859.1.12.  Adjust these branch names to
+                    // correspond to the same level.
                     var prevCommit = node.prev;
                     if (node.branchName != prevCommit.branchName)
                     {
@@ -644,6 +647,7 @@ namespace Bzr2Git4Notes
             //     LogWriter.Log(String.Format("{0} {1}", c.markId, c.revision));
             // }
         }
+
         // Walks over all nodes creating branches at merge points. Each node
         // gets its branch. Branches are built into hierarchy.
         void traverseBranches(List<Branch> branchList, ref HashSet<int> processedNodes, ref int minLevel)
@@ -674,17 +678,19 @@ namespace Bzr2Git4Notes
                         {
                             foreach (var mergedFrom in node.mergesFrom)
                             {
+                                // ignore merges from parent branches
+                                // (e.g., merge from trunk to a feature branch)
                                 if (processedNodes.Contains(mergedFrom.id))
                                     continue;
+                                // process only last merge from a branch
                                 if (!mergedFrom.finished())
                                     continue;
                                 var newBranch = new Branch();
                                 newBranch.end = mergedFrom;
                                 nextLevelBranches.Add(newBranch);
-                                //         branch.addChild(newBranch);
                             }
                         }
-                        node.branch = branch;                       
+                        node.branch = branch;
                         prevNode = node;
                         node = node.prev;
                     }
@@ -693,7 +699,7 @@ namespace Bzr2Git4Notes
                         if (!node.branched())
                             throw new Exception(String.Format("Must be branched node, id = {0}", node.id));
                         node.addBranch(branch);
-                        branch.begin = prevNode;   
+                        branch.begin = prevNode;
                         node.branch.addChild(branch);
                     }
                     theBranchList.Add(branch);
@@ -704,11 +710,6 @@ namespace Bzr2Git4Notes
         }
         #endregion
         #region === helper parsing methods ===
-        void addCommit(Commit commit)
-        {    
-            StoreList.Add(commit);
-        }
-
         static int ParseBugLength(string s)
         {
             var match = bugLengthRegex.Match(s);
@@ -764,7 +765,7 @@ namespace Bzr2Git4Notes
             try
             {
                 Adapter adapter = new Adapter();
-                adapter.Adapt(fname, ofname);			    
+                adapter.Adapt(fname, ofname);
             }
             catch (Exception ex)
             {
