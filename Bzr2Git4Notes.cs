@@ -5,6 +5,7 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Linq;
+using System.Runtime.Serialization.Formatters.Binary;
 
 namespace Bzr2Git4Notes
 {
@@ -26,7 +27,7 @@ namespace Bzr2Git4Notes
             }
         }
 
-        static readonly string logFile = "Bzr2Git4Notes.log";
+        static readonly string logFile = String.Format("{0}.log", MainClass.AssemblyName);
     }
 
     static class FormatHelper
@@ -79,6 +80,7 @@ namespace Bzr2Git4Notes
 
     // bzr-specific
     // the parsed branch id and nick, provided by 'property branch-nick id nick' command
+    [Serializable]
     class BranchName
     {
         public BranchName(string s)
@@ -98,6 +100,7 @@ namespace Bzr2Git4Notes
     }
 
     // the parsed author name and email
+    [Serializable]
     class Author
     {
         public Author(string s)
@@ -115,6 +118,7 @@ namespace Bzr2Git4Notes
     }
 
     // the parsed tag information, provided by 'reset' command
+    [Serializable]
     class Tag
     {
         // the parsed tag_name from 'reset refs/tags/tag_name' command
@@ -124,6 +128,7 @@ namespace Bzr2Git4Notes
     }
 
     // unused
+    [Serializable]
     class Rename
     {
         public string OrigName { get; set; }
@@ -132,6 +137,7 @@ namespace Bzr2Git4Notes
     }
 
     // Represents bzr branch.
+    [Serializable]
     class Branch
     {
         public Branch()
@@ -171,6 +177,7 @@ namespace Bzr2Git4Notes
     }
 
     // A node of bzr revision tree.
+    [Serializable]
     abstract class Node
     {
         public Node()
@@ -266,6 +273,7 @@ namespace Bzr2Git4Notes
     }
 
     // Parsed 'commit' command information from bzr fast-export stream.
+    [Serializable]
     class Commit : Node
     {
         public Commit()
@@ -333,6 +341,7 @@ namespace Bzr2Git4Notes
     // bzr 'fast-export --no-plain' to 'git fast-import' adapter.
     // Extacts some meta-inforation from bzr output (such as authors
     // and revision number) and transforms it into git notes data.
+    [Serializable]
     class Adapter
     {
         public Adapter()
@@ -346,7 +355,29 @@ namespace Bzr2Git4Notes
         {
             using (outputStream = string.IsNullOrEmpty(outputFname) ? Console.OpenStandardOutput() : File.OpenWrite(outputFname))
             {
+
+                if (MainClass.RestoreContext)
+                {
+                    BinaryFormatter formatter = new BinaryFormatter();
+                    using (FileStream fs = new FileStream(MainClass.StoreFile, FileMode.Open))
+                    {
+                        StoreList = (List<Commit>)formatter.Deserialize(fs);
+                        dirs = (HashSet<string>)formatter.Deserialize(fs);
+                    }
+                    RestoredCount = StoreList.Count;
+                }
+
                 AdaptInputStream(inputFname);
+
+                if (MainClass.StoreContext)
+                {
+                    BinaryFormatter formatter = new BinaryFormatter();
+                    using (FileStream fs = new FileStream(MainClass.StoreFile, FileMode.Create))
+                    {
+                        formatter.Serialize(fs, StoreList);
+                        formatter.Serialize(fs, dirs);
+                    }
+                }
                 acquireBranchLevels();
                 createBranches();
                 ApplyNotes();
@@ -520,8 +551,10 @@ namespace Bzr2Git4Notes
         void ApplyNotes()
         {
             int markId = StoreList[StoreList.Count - 1].markId + 1;
-            foreach (var commit in StoreList)
+            var start = RestoredCount > 0 ? RestoredCount : 0;
+            for (int i = start; i < StoreList.Count; ++i)
             {
+                var commit = StoreList[i];
                 WriteLine(commit.Notes(markId, commit.bzrReference));
                 markId++;
             }
@@ -735,7 +768,7 @@ namespace Bzr2Git4Notes
         }
         #endregion
         #region === private and static data ===
-        private static readonly HashSet<string> dirs = new HashSet<string>();
+        private static HashSet<string> dirs = new HashSet<string>();
         static readonly byte[] Newline = System.Text.UTF8Encoding.Default.GetBytes("\n");
         static readonly Regex bugLengthRegex = new Regex("property bugs ([0-9]+)", RegexOptions.Compiled);
         static Stream outputStream;
@@ -749,23 +782,47 @@ namespace Bzr2Git4Notes
         // about available branches. E.g., it misses nested branches with coincident names
         // (e.g.,'trunk').
         SortedDictionary<string, int> branchNameDict;
+        int RestoredCount;
         #endregion
     }
 
     class MainClass
     {
+        public static string InputFile;
+        public static string OutputFile;
+        public static bool StoreContext = false;
+        public static bool RestoreContext = false;
+        public static string StoreFile = String.Format("{0}.bin", AssemblyName);
+
+        public static string AssemblyName
+        {
+            get { return typeof(MainClass).Assembly.GetName().Name; }
+        }
+
+        public static void ParseOptions(string[] args)
+        {
+            foreach (var option in args)
+            {
+                if (option.StartsWith("--input="))
+                    InputFile = option.Substring("--input=".Length);
+                else if (option.StartsWith("--output="))
+                    OutputFile = option.Substring("--output=".Length);
+                else if (option.StartsWith("--store-context"))
+                    StoreContext = true;
+                else if (option.StartsWith("--restore-context"))
+                    RestoreContext = true;
+                else
+                    throw new Exception(String.Format("Unknown option {0}", option));
+            }
+        }
+
         public static int Main(string[] args)
         {
-            string fname = "";
-            string ofname = "";
-            if (args.Length > 0)
-                fname = args[0];
-            if (args.Length > 1)
-                ofname = args[1];
             try
             {
+                ParseOptions(args);
                 Adapter adapter = new Adapter();
-                adapter.Adapt(fname, ofname);
+                adapter.Adapt(InputFile, OutputFile);
             }
             catch (Exception ex)
             {
