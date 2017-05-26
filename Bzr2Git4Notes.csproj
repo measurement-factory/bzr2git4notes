@@ -8,7 +8,7 @@
     <ProjectGuid>{FA7FB344-DF67-44EA-930B-952A49164278}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <RootNamespace>Bzr2Git4Notes</RootNamespace>
-    <AssemblyName>Bzr2Git4Notes</AssemblyName>
+    <AssemblyName>bzr2git4notes</AssemblyName>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <DebugSymbols>true</DebugSymbols>

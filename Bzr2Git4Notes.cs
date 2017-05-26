@@ -11,20 +11,12 @@ namespace Bzr2Git4Notes
 {
     static class LogWriter
     {
-        static LogWriter()
-        {
-            if (File.Exists(logFile))
-            {
-                File.Delete(logFile);
-            }
-        }
-
         public static void Log(string msg)
         {
+            if (!MainClass.Logging)
+                return;
             using (StreamWriter writer = new StreamWriter(logFile, true))
-            {
                 writer.WriteLine(msg);
-            }
         }
 
         static readonly string logFile = String.Format("{0}.log", MainClass.AssemblyName);
@@ -291,9 +283,11 @@ namespace Bzr2Git4Notes
         public string Notes(int noteMark, string noteCommitId)
         {
             StringBuilder builder = new StringBuilder();
-            builder.Append("commit refs/notes/commits\n");
+            builder.Append(String.Format("commit refs/notes/{0}\n", MainClass.NoteNS));
             builder.Append(string.Format("mark :{0}\n", noteMark));
-            builder.Append(String.Format("committer ImportBot <ImportBot@example.com> {0} {1}\n", FormatHelper.SecondsSinceEpoch, FormatHelper.timeZoneOffset));
+            builder.Append(String.Format("committer {0} <{0}@example.com> {1} {2}\n",
+                                         MainClass.AssemblyName, FormatHelper.SecondsSinceEpoch, FormatHelper.timeZoneOffset));
+            string notesCommitMessage = String.Format("auto-generated git notes from bzr metadata ({0})", noteCommitId);
             builder.Append(String.Format("data {0}\n", notesCommitMessage.Length));
             builder.Append(notesCommitMessage);
             builder.Append("\n");
@@ -331,7 +325,6 @@ namespace Bzr2Git4Notes
         public BranchName theBranchName;
         // commit authors from parsed 'author ...' commands
         public List<Author> authors;
-        static readonly string notesCommitMessage = "generating notes from bzr metadata";
         public List<Rename> renames; // unused
         public List<string> deletes; // unused
         public List<string> dirs; // unused
@@ -355,7 +348,6 @@ namespace Bzr2Git4Notes
         {
             using (outputStream = string.IsNullOrEmpty(outputFname) ? Console.OpenStandardOutput() : File.OpenWrite(outputFname))
             {
-
                 if (MainClass.RestoreContext)
                 {
                     BinaryFormatter formatter = new BinaryFormatter();
@@ -365,6 +357,7 @@ namespace Bzr2Git4Notes
                         dirs = (HashSet<string>)formatter.Deserialize(fs);
                     }
                     RestoredCount = StoreList.Count;
+                    LogWriter.Log(String.Format("Deserialized {0} commits", RestoredCount));
                 }
 
                 AdaptInputStream(inputFname);
@@ -376,6 +369,7 @@ namespace Bzr2Git4Notes
                     {
                         formatter.Serialize(fs, StoreList);
                         formatter.Serialize(fs, dirs);
+                        LogWriter.Log(String.Format("Serialized {0} commits", StoreList.Count));
                     }
                 }
                 acquireBranchLevels();
@@ -552,6 +546,7 @@ namespace Bzr2Git4Notes
         {
             int markId = StoreList[StoreList.Count - 1].markId + 1;
             var start = RestoredCount > 0 ? RestoredCount : 0;
+            LogWriter.Log(String.Format("Applying notes, start = {0}", start));
             for (int i = start; i < StoreList.Count; ++i)
             {
                 var commit = StoreList[i];
@@ -640,6 +635,7 @@ namespace Bzr2Git4Notes
                         if (branchNameDict.ContainsKey(prevCommit.branchName) &&
                             !branchNameDict.ContainsKey(node.branchName))
                         {
+                            LogWriter.Log(String.Format("renamed branch from {0} to {1}", prevCommit.branchName, node.branchName));
                             int prevLevel = branchNameDict[prevCommit.branchName];
                             // can't have level == 1 which is for trunk names
                             prevLevel = prevLevel <= 2 ? 2 : prevLevel;
@@ -793,6 +789,8 @@ namespace Bzr2Git4Notes
         public static bool StoreContext = false;
         public static bool RestoreContext = false;
         public static string StoreFile = String.Format("{0}.bin", AssemblyName);
+        public static string NoteNS = "commits";
+        public static bool Logging = false;
 
         public static string AssemblyName
         {
@@ -811,6 +809,10 @@ namespace Bzr2Git4Notes
                     StoreContext = true;
                 else if (option.StartsWith("--restore-context"))
                     RestoreContext = true;
+                else if (option.StartsWith("--note-ns="))
+                    NoteNS = option.Substring("--note-ns=".Length);
+                else if (option.StartsWith("--logging"))
+                    Logging = true;
                 else
                     throw new Exception(String.Format("Unknown option {0}", option));
             }
@@ -821,15 +823,19 @@ namespace Bzr2Git4Notes
             try
             {
                 ParseOptions(args);
+                LogWriter.Log(String.Format("Started at {0}", DateTime.Now));
                 Adapter adapter = new Adapter();
                 adapter.Adapt(InputFile, OutputFile);
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine("Unhandled exception: {0}", ex.Message);
-                Console.Error.WriteLine("Unhandled exception: {0}", ex.StackTrace);
+                Console.Error.WriteLine(String.Format("Terminated with exception: {0}\n{1}",
+                                                      ex.Message, ex.StackTrace));
+                LogWriter.Log(String.Format("Terminated with exception at {0} : {1}\n{2}",
+                                            DateTime.Now, ex.Message, ex.StackTrace));
                 return 1;
             }
+            LogWriter.Log(String.Format("Finished successfully at {0}", DateTime.Now));
             return 0;
         }
     }
