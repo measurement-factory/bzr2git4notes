@@ -10,7 +10,7 @@ export bzr_root=/home/ed/work/squid
 # Specify bzr trunk path (it will be converted into git 'master'),
 # it is currently v5.0. Other branches should be provided below when
 # running import_branch().
-export thunk_path=${bzr_root}/5.0
+export trunk_path=${bzr_root}/5.0
 
 # the compiled bzr2git4notes should be in the current directory
 export converter="mono bzr2git4notes.exe"
