@@ -280,7 +280,7 @@ namespace Bzr2Git4Notes
             authors = new List<Author>();
         }
 
-        public string Notes(int noteMark, string noteCommitId)
+        public string Notes(int noteMark, string noteCommitId, int lastImportNoteId)
         {
             StringBuilder builder = new StringBuilder();
             builder.Append(String.Format("commit refs/notes/{0}\n", MainClass.NoteNS));
@@ -291,6 +291,8 @@ namespace Bzr2Git4Notes
             builder.Append(String.Format("data {0}\n", notesCommitMessage.Length));
             builder.Append(notesCommitMessage);
             builder.Append("\n");
+            if (lastImportNoteId > 0)
+                builder.Append(String.Format("from :{0}\n", lastImportNoteId));
             builder.Append(String.Format("N inline :{0}\n", markId));
 
             StringBuilder messageBuilder = new StringBuilder();
@@ -342,6 +344,7 @@ namespace Bzr2Git4Notes
             theBranchList = new List<Branch>();
             StoreList = new List<Commit>();
             branchNameDict = new SortedDictionary<string, int>();
+            parseGitExportFile();
         }
         #region === public methods ===
         public void Adapt(string inputFname, string outputFname)
@@ -544,13 +547,20 @@ namespace Bzr2Git4Notes
         // write note information for all commits
         void ApplyNotes()
         {
-            int markId = StoreList[StoreList.Count - 1].markId + 1;
             var start = RestoredCount > 0 ? RestoredCount : 0;
             LogWriter.Log(String.Format("Applying notes, start = {0}", start));
+            bool attachtoPrevNotes = false;
+            int markId = StoreList[StoreList.Count - 1].markId + 1;
+            if (lastImportNoteId > 0)
+            {
+                attachtoPrevNotes = true;
+                markId = lastImportNoteId + 1;
+            }
             for (int i = start; i < StoreList.Count; ++i)
             {
                 var commit = StoreList[i];
-                WriteLine(commit.Notes(markId, commit.bzrReference));
+                WriteLine(commit.Notes(markId, commit.bzrReference, attachtoPrevNotes ? lastImportNoteId : 0));
+                attachtoPrevNotes = false;
                 markId++;
             }
         }
@@ -739,6 +749,7 @@ namespace Bzr2Git4Notes
         }
         #endregion
         #region === helper parsing methods ===
+
         static int ParseBugLength(string s)
         {
             var match = bugLengthRegex.Match(s);
@@ -763,6 +774,20 @@ namespace Bzr2Git4Notes
                 throw new Exception(String.Format("commit = null for {0}", context));
         }
         #endregion
+
+        void parseGitExportFile()
+        {
+            if (!String.IsNullOrEmpty(MainClass.GitExportFile))
+            {
+                string last = File.ReadLines(MainClass.GitExportFile).Last();
+                string [] arr = last.Split(new char[] {' '}, StringSplitOptions.RemoveEmptyEntries);
+                if (arr.Length != 2 || !arr[0].StartsWith(":"))
+                    throw new Exception("Unknown git fast-export format");
+                lastImportNoteId = int.Parse(arr[0].Substring(1));
+                LogWriter.Log(String.Format("{0}: last git markid {1}", MainClass.GitExportFile, lastImportNoteId));
+            }
+        }
+
         #region === private and static data ===
         private static HashSet<string> dirs = new HashSet<string>();
         static readonly byte[] Newline = System.Text.UTF8Encoding.Default.GetBytes("\n");
@@ -779,6 +804,10 @@ namespace Bzr2Git4Notes
         // (e.g.,'trunk').
         SortedDictionary<string, int> branchNameDict;
         int RestoredCount;
+        // The last markid from git marks file (if provided), which is the last note
+        // commit id because we write note commits at the end. We need this id to
+        // chain note ids generated for different bzr branches.
+        int lastImportNoteId;
         #endregion
     }
 
@@ -791,6 +820,7 @@ namespace Bzr2Git4Notes
         public static string StoreFile = String.Format("{0}.bin", AssemblyName);
         public static string NoteNS = "commits";
         public static bool Logging = false;
+        public static string GitExportFile;
 
         public static string AssemblyName
         {
@@ -813,6 +843,8 @@ namespace Bzr2Git4Notes
                     NoteNS = option.Substring("--note-ns=".Length);
                 else if (option.StartsWith("--logging"))
                     Logging = true;
+                else if (option.StartsWith("--git-export-file="))
+                    GitExportFile = option.Substring("--git-export-file=".Length);
                 else
                     throw new Exception(String.Format("Unknown option {0}", option));
             }
