@@ -344,6 +344,9 @@ namespace Bzr2Git4Notes
             theBranchList = new List<Branch>();
             StoreList = new List<Commit>();
             branchNameDict = new SortedDictionary<string, int>();
+            deletedFileLines = new SortedDictionary<string, string>();
+            renamedFileLines = new SortedDictionary<string,string>();
+            renamedFiles = new SortedDictionary<string, string>();
             parseGitExportFile();
         }
         #region === public methods ===
@@ -404,7 +407,7 @@ namespace Bzr2Git4Notes
                     {
                         if (commit != null)
                         {
-                            StoreList.Add(commit);
+                            addCommit(commit);
                             commit = null;
                         }
                         if (s.StartsWith("reset refs/tags/"))
@@ -417,7 +420,7 @@ namespace Bzr2Git4Notes
                     else if (s.StartsWith("commit "))
                     {
                         if (commit != null)
-                            StoreList.Add(commit);
+                            addCommit(commit);
                         commit = new Commit();
                         WriteLine(s);
                     }
@@ -509,7 +512,8 @@ namespace Bzr2Git4Notes
                             rename.OrigName = origName;
                             rename.NewName = newName;
                             commit.renames.Add(rename);
-                            WriteLine(s);
+                            renamedFileLines.Add(origName, s);
+                            renamedFiles.Add(newName, origName);
                         }
                     }
                     else if (s.StartsWith("D "))
@@ -517,7 +521,10 @@ namespace Bzr2Git4Notes
                         ThrowIfNull(commit, s);
                         var name = Remainder(s, "D ");
                         if (!dirs.Contains(name))
+                        {
                             WriteLine(s);
+                            deletedFileLines.Add(name, s);
+                        }
                     }
                     else if (s.StartsWith("M "))
                     {
@@ -525,7 +532,21 @@ namespace Bzr2Git4Notes
                         if (s.StartsWith("M 040000"))
                             dirs.Add(s.Substring(11));
                         else
+                        {
+                            string name = s.Substring(s.LastIndexOf(" ") + 1);
+                            // rename first, then modify
+                            if (renamedFiles.ContainsKey(name))
+                            {
+                                string orig = renamedFiles[name];
+                                // problematic r10084:
+                                // R helpers/negotiate_auth/squid_kerb_auth/config.test helpers/negotiate_auth/kerberos/config.test
+                                if (!deletedFileLines.ContainsKey(orig))
+                                    WriteLine(renamedFileLines[orig]);
+                                renamedFileLines.Remove(orig);
+                                renamedFiles.Remove(name);
+                            }
                             WriteLine(s);
+                        }
                     }
                     else if (s.StartsWith("data "))
                     {
@@ -541,7 +562,7 @@ namespace Bzr2Git4Notes
                     }
                 }
                 if (commit != null)
-                    StoreList.Add(commit);
+                    addCommit(commit);
             }
         }
         // write note information for all commits
@@ -787,6 +808,18 @@ namespace Bzr2Git4Notes
                 LogWriter.Log(String.Format("{0}: last git markid {1}", MainClass.GitExportFile, lastImportNoteId));
             }
         }
+        void addCommit(Commit commit)
+        {
+            foreach (var pair in renamedFileLines)
+            {
+                if (!deletedFileLines.ContainsKey(pair.Key))
+                    WriteLine(pair.Value);
+            }
+            renamedFileLines.Clear();
+            renamedFiles.Clear();
+            deletedFileLines.Clear();
+            StoreList.Add(commit);
+        }
 
         #region === private and static data ===
         private static HashSet<string> dirs = new HashSet<string>();
@@ -803,6 +836,18 @@ namespace Bzr2Git4Notes
         // about available branches. E.g., it misses nested branches with coincident names
         // (e.g.,'trunk').
         SortedDictionary<string, int> branchNameDict;
+
+        // These three dictionaries help handling complex
+        // scenarious of renaming/deleting/modifying a single file
+        // within a specific commit. For example, we should not rename/move
+        // file (when its direcotry gets renamed) if it has been deleted yet.
+        // name, line
+        SortedDictionary<string, string> deletedFileLines;
+        // orig file name, line
+        SortedDictionary<string, string> renamedFileLines;
+        // new file name, orig file name
+        SortedDictionary<string, string> renamedFiles;
+
         int RestoredCount;
         // The last markid from git marks file (if provided), which is the last note
         // commit id because we write note commits at the end. We need this id to
