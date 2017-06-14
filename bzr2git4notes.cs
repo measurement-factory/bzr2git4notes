@@ -123,9 +123,48 @@ namespace Bzr2Git4Notes
     [Serializable]
     class Rename
     {
-        public string OrigName { get; set; }
+        public string line;
+        public string origName;
+        public string newName;
+    }
 
-        public string NewName { get; set; }
+    // unused
+    [Serializable]
+    class Renames
+    {
+        public Renames()
+        {
+            byOrigDict = new SortedDictionary<string, Rename>();
+            byNewDict = new SortedDictionary<string, Rename>();
+        }
+        public void add(Rename rename)
+        {
+            byOrigDict.Add(rename.origName, rename);
+            byNewDict.Add(rename.newName, rename);
+        }
+        public void remove(Rename rename)
+        {
+            byNewDict.Remove(rename.newName);
+            byOrigDict.Remove(rename.origName);
+        }
+        public Rename find(string name)
+        {
+            if (byOrigDict.ContainsKey(name))
+                return byOrigDict[name];
+            else if (byNewDict.ContainsKey(name))
+                return byNewDict[name];
+            return null;
+        }
+        public void clear()
+        {
+            byOrigDict.Clear();
+            byNewDict.Clear();
+        }
+
+        // orig file name
+        public SortedDictionary<string, Rename> byOrigDict;
+        // new file name
+        public SortedDictionary<string, Rename> byNewDict;
     }
 
     // Represents bzr branch.
@@ -273,9 +312,6 @@ namespace Bzr2Git4Notes
             markId = -1;
             fromMarkId = -1;
             mergeMarkId = -1;
-            renames = new List<Rename>();
-            deletes = new List<string>();
-            dirs = new List<string>();
             tags = new List<Tag>();
             authors = new List<Author>();
         }
@@ -327,9 +363,6 @@ namespace Bzr2Git4Notes
         public BranchName theBranchName;
         // commit authors from parsed 'author ...' commands
         public List<Author> authors;
-        public List<Rename> renames; // unused
-        public List<string> deletes; // unused
-        public List<string> dirs; // unused
         public List<Tag> tags; // unused
     }
 
@@ -345,8 +378,7 @@ namespace Bzr2Git4Notes
             StoreList = new List<Commit>();
             branchNameDict = new SortedDictionary<string, int>();
             deletedFileLines = new SortedDictionary<string, string>();
-            renamedFileLines = new SortedDictionary<string,string>();
-            renamedFiles = new SortedDictionary<string, string>();
+            renames = new Renames();
             parseGitExportFile();
         }
         #region === public methods ===
@@ -509,11 +541,10 @@ namespace Bzr2Git4Notes
                         else
                         {
                             Rename rename = new Rename();
-                            rename.OrigName = origName;
-                            rename.NewName = newName;
-                            commit.renames.Add(rename);
-                            renamedFileLines.Add(origName, s);
-                            renamedFiles.Add(newName, origName);
+                            rename.origName = origName;
+                            rename.newName = newName;
+                            rename.line = s;
+                            renames.add(rename);
                         }
                     }
                     else if (s.StartsWith("D "))
@@ -535,15 +566,15 @@ namespace Bzr2Git4Notes
                         {
                             string name = s.Substring(s.LastIndexOf(" ") + 1);
                             // rename first, then modify
-                            if (renamedFiles.ContainsKey(name))
+                            Rename rename = renames.find(name);
+                            if (rename != null)
                             {
-                                string orig = renamedFiles[name];
                                 // problematic r10084:
                                 // R helpers/negotiate_auth/squid_kerb_auth/config.test helpers/negotiate_auth/kerberos/config.test
-                                if (!deletedFileLines.ContainsKey(orig))
-                                    WriteLine(renamedFileLines[orig]);
-                                renamedFileLines.Remove(orig);
-                                renamedFiles.Remove(name);
+                                // problematic r11203: src/mgr/Response.h
+                                if (!deletedFileLines.ContainsKey(rename.origName))
+                                    WriteLine(rename.line);
+                                renames.remove(rename);
                             }
                             WriteLine(s);
                         }
@@ -810,13 +841,13 @@ namespace Bzr2Git4Notes
         }
         void addCommit(Commit commit)
         {
-            foreach (var pair in renamedFileLines)
+            foreach (var pair in renames.byOrigDict)
             {
-                if (!deletedFileLines.ContainsKey(pair.Key))
-                    WriteLine(pair.Value);
+                var rename = pair.Value;
+                if (!deletedFileLines.ContainsKey(rename.origName))
+                    WriteLine(rename.line);
             }
-            renamedFileLines.Clear();
-            renamedFiles.Clear();
+            renames.clear();
             deletedFileLines.Clear();
             StoreList.Add(commit);
         }
@@ -843,10 +874,8 @@ namespace Bzr2Git4Notes
         // file (when its direcotry gets renamed) if it has been deleted yet.
         // name, line
         SortedDictionary<string, string> deletedFileLines;
-        // orig file name, line
-        SortedDictionary<string, string> renamedFileLines;
-        // new file name, orig file name
-        SortedDictionary<string, string> renamedFiles;
+
+        Renames renames;
 
         int RestoredCount;
         // The last markid from git marks file (if provided), which is the last note
