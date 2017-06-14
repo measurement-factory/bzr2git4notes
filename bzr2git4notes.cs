@@ -119,7 +119,6 @@ namespace Bzr2Git4Notes
         public int fromId;
     }
 
-    // unused
     [Serializable]
     class Rename
     {
@@ -128,7 +127,6 @@ namespace Bzr2Git4Notes
         public string newName;
     }
 
-    // unused
     [Serializable]
     class Renames
     {
