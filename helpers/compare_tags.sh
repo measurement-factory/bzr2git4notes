@@ -1,20 +1,49 @@
-#! /bin/sh
+#! /bin/sh -e
 
-# Compares bzr against git Squid source trees for each of the given TAG.
-# List of tags to check is provided via tags_file.
+# Verifies that repository tags point to identical bzr and git sources.
+# Exits with a non-zero code if at least one tag fails verification.
+# Note that bzr tags are branch-based while git tags are global.
 
-tags_file=/tmp/Squid/tags_v4.txt
-# a path a specific bzr branch: 
-bzr_root=/tmp/Squid/bzr/v4
-# a path to the converted git repository
-git_root=/tmp/Squid/git
+# a requred path to a checked out bzr branch:
+bzr_root="$1"
+shift
 
-for i in `cat $tags_file`
+# a requred path to a git repository
+git_root="$1"
+shift
+
+# tag names to check (optional)
+tags=$@
+
+if test -z "$tags"
+then
+    tags=`mktemp`
+    cd $bzr_root
+    tags=`bzr tags | fgrep -v '?' | sed 's/ .*//'`
+    cd - > /dev/null
+    echo "Automatically computed tags:"
+    echo $tags
+fi
+
+result=0
+
+for tag in $tags
 do
-  cd $git_root
-  git checkout tags/${i}
-  cd $bzr_root
-  bzr update -r tag:${i}
-  diff -r -x '.git' -x '.bzr' $bzr_root $git_root
-  echo $? $i >> ${tags_file}.log
+    echo "Tag: $tag"
+
+    cd $git_root
+    git checkout --quiet tags/${tag}
+    cd - > /dev/null
+
+    cd $bzr_root
+    bzr update --quiet -r tag:${tag}
+    cd - > /dev/null
+
+    if ! diff -ur -x '.git' -x '.bzr' $bzr_root $git_root
+    then
+        echo "ERROR: bzr and git tag ${tag} differ!"
+        result=1
+    fi
 done
+
+exit $result
