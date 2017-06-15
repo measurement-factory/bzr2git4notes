@@ -91,24 +91,6 @@ namespace Bzr2Git4Notes
         public string nick;
     }
 
-    // the parsed author name and email
-    [Serializable]
-    class Author
-    {
-        public Author(string s)
-        {
-            string[] arr = s.Split(new char [] { ' ' });
-            if (arr.Length < 2)
-                throw new Exception(String.Format("invalid author format: {0}", s));
-            name = arr[0];
-            email = arr[1];
-        }
-        // author name
-        public string name;
-        // author email
-        public string email;
-    }
-
     // the parsed tag information, provided by 'reset' command
     [Serializable]
     class Tag
@@ -311,7 +293,7 @@ namespace Bzr2Git4Notes
             fromMarkId = -1;
             mergeMarkId = -1;
             tags = new List<Tag>();
-            authors = new List<Author>();
+            authors = new List<string>();
         }
 
         public string Notes(int noteMark, string noteCommitId, int lastImportNoteId)
@@ -331,7 +313,7 @@ namespace Bzr2Git4Notes
 
             StringBuilder messageBuilder = new StringBuilder();
             for (int i = 1; i < authors.Count; ++i)
-                messageBuilder.Append(String.Format("Co-Authored-By: {0} {1}\n", authors[i].name, authors[i].email));
+                messageBuilder.Append(String.Format("Co-Authored-By: {0}\n", authors[i]));
             if (!String.IsNullOrEmpty(bug))
                 messageBuilder.Append(String.Format("Fixes: {0}\n", bug));
             messageBuilder.Append(String.Format("Bzr-Reference: {0}\n", noteCommitId));
@@ -360,7 +342,7 @@ namespace Bzr2Git4Notes
         // the parsed bzr-specific 'property branch-nick ...' command
         public BranchName theBranchName;
         // commit authors from parsed 'author ...' commands
-        public List<Author> authors;
+        public List<string> authors;
         public List<Tag> tags; // unused
     }
 
@@ -469,7 +451,9 @@ namespace Bzr2Git4Notes
                     else if (s.StartsWith("author "))
                     {
                         ThrowIfNull(commit, s);
-                        commit.authors.Add(new Author(Remainder(s, "author ")));
+                        var remainder = Remainder(s, "author ");
+                        var author = remainder.Substring(0, remainder.LastIndexOf('>') + 1);
+                        commit.authors.Add(author);
                         if (commit.authors.Count == 1)
                             WriteLine(s);
                     }
