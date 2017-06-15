@@ -1,24 +1,35 @@
-#! /bin/sh
+#! /bin/sh -e
 
-# Compares bzr against git Squid source trees for each of the given
-# bzr revision and corresponding git sha.
-# The 'sha rRevNo' pairs are provided via sha_revs_file, containing
-# these lines, e.g.,:
+# Verifies that repository commits point to identical bzr and git sources.
+# Exits with a non-zero code if at least one commit fails verification.
+# Note that bzr revisions are branch-based while git hashes are global.
+
+# Expects (git hash, bzr revision) pairs on stdin. For example:
 # d2167ca720605f7b857c8ff75f1c5ecfe8c9823e r14000
 
-sha_revs_file=/tmp/Squid/sha-revs-v4.txt
-# a path a specific bzr branch: 
-bzr_root=/tmp/Squid/bzr/v4
-# a path to the converted git repository
-git_root=/tmp/Squid/git
+# a requred path to a checked out bzr branch:
+bzr_root="$1"
+
+# a requred path to a git repository
+git_root="$2"
+
+result=0
 
 while read sha rev
 do
-  cd $git_root
-  git reset --hard $sha
-  cd $bzr_root
-  bzr update -${rev}
-  diff -r -x '.git' -x '.bzr' $bzr_root $git_root > /dev/null
-  echo $? $rev >> ${sha_revs_file}.log
-done < $sha_revs_file
+    cd $git_root
+    git reset --quiet --hard $sha
+    cd - > /dev/null
 
+    cd $bzr_root
+    bzr update --quiet -${rev}
+    cd - > /dev/null
+
+    if ! diff -ur -x '.git' -x '.bzr' $bzr_root $git_root
+    then
+        echo "ERROR: git $sha differs from bzr ${rev}!"
+        result=1
+    fi
+done
+
+exit $result
