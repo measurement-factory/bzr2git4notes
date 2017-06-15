@@ -15,6 +15,6 @@ do
   git checkout tags/${i}
   cd $bzr_root
   bzr update -r tag:${i}
-  diff -r -x '.git' -x '.bzr' -x $bzr_root $git_root 
+  diff -r -x '.git' -x '.bzr' $bzr_root $git_root
   echo $? $i >> ${tags_file}.log
 done
