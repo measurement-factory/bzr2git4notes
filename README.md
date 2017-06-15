@@ -1,32 +1,27 @@
-bzr2git4notes is a Bazaar to Git converter that uses git notes to preserve bzr
-metadata that cannot be stored in git commits.
+bzr2git4notes is a Bazaar to Git converter that uses git notes to preserve bzr metadata that cannot be stored in git commits.
 
 To compile and run it under mono on Linux:
 
     $ mcs bzr2git4notes.cs
     $ mono bzr2git4notes.exe
 
-The tool expects data stream produced by 'bzr fast-export' command on its stdin
-and sends converted data with generated git notes to its stdout. For example:
+The tool expects data stream produced by `bzr fast-export` command on its stdin and sends converted data with generated git notes to its stdout. For example:
 
-    $ trunk_path=/path/to/bzr/trunk
-    $ bzr fast-export --no-plain  $trunk_path | mono bzr2git4notes.exe |
-      GIT_DIR=project/.git git fast-import
+    $ bzr_repo=/bzr/repos/Squid
+    $ git_repo=/git/repos/squid
+    $ export GIT_DIR=$git_repo/.git
+    $ bzr fast-export --no-plain $bzr_repo/trunk |
+      mono bzr2git4notes.exe |
+      git fast-import
 
-Converting several unmerged bzr branches with common history is slightly more
-complicated because each iteration produces a context used in the next
-iteration. This context includes 'marks' files and bzr2git4notes internal data.
-To simplify process, there is a helper bzr2git.sh script, hiding these details
-from the user. Before running, the script should be adjusted by specifying paths
-to bzr and git repositories. The first run should import git 'master' from bzr
-'trunk'. After that, all other branches are imported.
-For example:
+A typical project repository has several partially overlapping branches. Converting the entire repository requires keeping export/import state between individual bzr branch conversions. That state consists of standard "marks" files and bzr2git4notes internal data. The `bzr2git.sh` script hides these details from the user:
 
-# first step: import v5.0 into 'master'
-bzr2git.sh --bzr-branch 5.0 --git-branch master
+    $ bzr_repo=/bzr/repos/Squid
+    $ git_repo=/git/repos/squid
 
-# second step: import v4.0 and v3.5 branches
-bzr2git.sh --bzr-branch 4.0 --git-branch 4.0
-bzr2git.sh --bzr-branch 3.5 --git-branch 3.5
+    # The first step: import bzr v5.0 branch into git master branch.
+    $ ./bzr2git.sh $bzr_repo/5 $git_repo/master
 
-
+    # Further steps: import a few more version branches...
+    $ ./bzr2git.sh $bzr_repo/4 $git_repo/v4
+    $ ./bzr2git.sh $bzr_repo/3.5 $git_repo/v3.5

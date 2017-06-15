@@ -1,111 +1,121 @@
-#! /bin/sh
+#! /bin/sh -e
 
-# This script automates exporting a Squid bzr branch
-# into a git repository. Before running it, please
-# specify directories for bzr and git repositories (below).
+# This script implements a single step of bzr-to-git conversion:
+# Importing a single bzr branch into a git repository.
 #
-# The initial step initializes git repository and imports
-# bzr 'trunk' (or v5.0) into git 'master':
+# The script assumes that the git "master" branch is the going to be the
+# first branch in the git repository (and initializes the git repository
+# when importing that master branch).
 #
-# bzr2git.sh --bzr-branch 5.0 --git-branch master
+# Example usage:
+#   bzr2git.sh ~/bazaar/repos/squid/5 /tmp/git/master
+#   bzr2git.sh ~/bazaar/repos/squid/4 /tmp/git/v4
+#   bzr2git.sh ~/bazaar/repos/squid/3.5 /tmp/git/v3.5
+#   ...
 #
-# After that, it is possible to import all other required branches,
-# for example:
-#
-# bzr2git.sh --bzr-branch 4.0 --git-branch 4.0
-# bzr2git.sh --bzr-branch 3.5 --git-branch 3.5
-# ...
-#
-# The tool generates several context files (marks.git, marks.bzr and
-# bzr2git4notes.bin), used for importing multiple branches.
+# The tool generates several conversion state files (marks.git,
+# marks.bzr and bzr2git4notes.bin). Keep them during the conversion!
 
-
-# Please specify git repository directory.
-# It will be initialized before importing 'master'.
-export git_root=${PWD}/git_root
-
-# Please specify bzr repository directory.
-# All exporting bzr branches should be here, within
-# corresponding sub-directories.
-export bzr_root=${PWD}/bzr_root
 
 # the compiled bzr2git4notes should be in the current directory
 export converter="mono bzr2git4notes.exe"
 
-export GIT_DIR=${git_root}/.git
+usage()
+{
+    echo 'usage: bzr2git.sh <bzr_dir/branch_name> <git_dir/branch_name>'
+}
 
-# parse command line
-while [ $# -gt 1 ]
-do
-key="$1"
-case $key in
-    -b|--bzr-branch)
-    bzr_branch="$2"
-    shift
-    ;;
-    -g|--git-branch)
-    git_branch="$2"
-    shift
-    ;;
-    *)
-    ;;
-esac
-shift
-done
+source="$1"
+destination="$2"
 
-if [ -z $git_branch ] || [ -z $bzr_branch ]
+if [ -z "$source" ]
 then
-    echo 'usage: bzr2git.sh -b <bzr_branch> -g <git_branch>'
+    usage
+    echo "Missing bzr directory and branch name"
+    exit 1
 fi
 
-# (re)create git repository
+if [ -z "$destination" ]
+then
+    usage
+    echo "Missing git directory and branch name"
+    exit 1
+fi
+
+if [ ! -z "$3" ]
+then
+    usage
+    echo "Got more than two parameters"
+    exit 1
+fi
+
+# git repository directory
+export git_root=`dirname $destination`
+# future git branch name
+export git_branch=`basename $destination`
+
+if [ ! -d "$source" ]
+then
+    usage
+    echo "Expecting $source to be a directory"
+    exit 1
+fi
+
+if [ ! -d "$source/.bzr" ]
+then
+    usage
+    echo "Expecting $source to be a bzr checkout"
+    exit 1
+fi
+
+if [ -e "$git_root" -a ! -d "$git_root/.git"]
+then
+    usage
+    echo "Expecting $destination to start with a git repository directory name but $git_root is not it"
+    exit 1
+fi
+
+export GIT_DIR=${git_root}/.git
+
+# create git repository (TODO: leave that up to the user?)
 initRepository()
 {
     if [ -d $git_root ]
     then
-      rm -rf $git_root
+        echo "Expecting no git repository when importing master; found: $git_root"
+        exit 1
     fi
     mkdir $git_root
     git init $git_root
 }
 
+mustExist()
+{
+    if [ ! -e "$1" ]
+    then
+        echo "$0: $1 does not exist!"
+        exit 1
+    fi
+}
+
 ret=0
-
-checkCreated()
-{
-  if [ -e $1 ]
-  then
-     echo bzr2git: $1 successfully created.
-  else
-     echo bzr2git: $1 creation failure!
-     ret=1
-  fi
-}
-
-check()
-{
-  if [ ! -e $1 ]
-  then
-     echo bzr2git: $1 does not exist!
-     exit 1
-  fi
-}
-
 if [ $git_branch = 'master' ]
 then
     initRepository
-    bzr fast-export --no-plain --export-marks=./marks.bzr ${bzr_root}/${bzr_branch} |
-        $converter --store-context | git fast-import --export-marks=./marks.git
+    bzr fast-export --no-plain --export-marks=./marks.bzr $source |
+        $converter --store-context |
+        git fast-import --export-marks=./marks.git
     ret=$?
-    checkCreated marks.bzr
-    checkCreated bzr2git4notes.bin
-    checkCreated marks.git
-else
-    check marks.bzr
-    check bzr2git4notes.bin
-    check marks.git
 
-    bzr fast-export --no-plain --import-marks=./marks.bzr -b $git_branch ${bzr_root}/${bzr_branch} |
+    mustExist marks.bzr
+    mustExist bzr2git4notes.bin
+    mustExist marks.git
+else
+    mustExist marks.bzr
+    mustExist bzr2git4notes.bin
+    mustExist marks.git
+
+    bzr fast-export --no-plain --import-marks=./marks.bzr -b $git_branch $source |
         $converter --restore-context --git-export-file=./marks.git |
         git fast-import --import-marks=./marks.git --export-marks=./marks_.git
     ret=$?
@@ -113,4 +123,3 @@ else
 fi
 
 exit $ret
-
