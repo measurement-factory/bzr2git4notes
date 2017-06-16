@@ -328,7 +328,16 @@ namespace Bzr2Git4Notes
 
         public override string branchName { get { return theBranchName.name; } }
         // git notes information in format of '<branch_nick> r<revno>'
-        public string bzrReference { get { return String.Format("{0} r{1}", theBranchName.nick, revision); } }
+        public string bzrReference
+        {
+            get
+            {
+                string bzrRef = String.Format("{0} r{1}", gitBranchName, revision);
+                if (revision.Contains("."))
+                    bzrRef = String.Format("{0} from {1}", bzrRef, theBranchName.nick);
+                return bzrRef;
+            }
+        }
         // the parsed id from 'mark :id' command
         public int markId;
         // the parsed fromId from 'from :fromId' command
@@ -341,6 +350,9 @@ namespace Bzr2Git4Notes
         public string bug;
         // the parsed bzr-specific 'property branch-nick ...' command
         public BranchName theBranchName;
+        // The git name this commit will be applied on, specified by
+        // 'commit refs/heads/<git_branch_name>' command.
+        public string gitBranchName;
         // commit authors from parsed 'author ...' commands
         public List<string> authors;
         public List<Tag> tags; // unused
@@ -434,6 +446,7 @@ namespace Bzr2Git4Notes
                         if (commit != null)
                             addCommit(commit);
                         commit = new Commit();
+                        commit.gitBranchName = Remainder(s, "commit refs/heads/");
                         WriteLine(s);
                     }
                     else if (s.StartsWith("mark :"))
