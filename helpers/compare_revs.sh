@@ -5,7 +5,7 @@
 # Note that bzr revisions are branch-based while git hashes are global.
 
 # Expects (git hash, bzr revision) pairs on stdin. For example:
-# d2167ca720605f7b857c8ff75f1c5ecfe8c9823e r14000
+# d2167ca720605f7b857c8ff75f1c5ecfe8c9823e 14000
 
 # a requred path to a checked out bzr branch:
 bzr_root="$1"
@@ -22,7 +22,7 @@ do
     cd - > /dev/null
 
     cd $bzr_root
-    bzr update --quiet -${rev}
+    bzr update --quiet -r${rev}
     cd - > /dev/null
 
     if ! diff -ur -x '.git' -x '.bzr' $bzr_root $git_root
