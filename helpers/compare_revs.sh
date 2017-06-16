@@ -18,7 +18,7 @@ result=0
 while read sha rev
 do
     cd $git_root
-    git reset --quiet --hard $sha
+    git checkout --quiet --detach $sha
     cd - > /dev/null
 
     cd $bzr_root
