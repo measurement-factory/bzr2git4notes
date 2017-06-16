@@ -68,7 +68,7 @@ then
     exit 1
 fi
 
-if [ -e "$git_root" -a ! -d "$git_root/.git"]
+if [ -e "$git_root" -a ! -d "$git_root/.git" ]
 then
     usage
     echo "Expecting $destination to start with a git repository directory name but $git_root is not it"
