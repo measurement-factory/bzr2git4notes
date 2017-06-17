@@ -36,7 +36,7 @@ do
         sort --key 3,3 > /tmp/git.log
     cd - > /dev/null
 
-    # SELECT bzr.revno, sha WHERE bzr.revno == git.revno ORDER BY bzr.revno
+    # SELECT bzr.revno, git.hash WHERE bzr.revno == git.revno ORDER BY bzr.revno
     # The sort order minimizes each step changes to increase checkout speed.
     join -1 1 -2 3 -o 1.1,2.1 /tmp/bzr.log /tmp/git.log |
         sort --version-sort --key 1,1 > /tmp/bzrgit.log
