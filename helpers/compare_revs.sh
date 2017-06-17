@@ -4,7 +4,7 @@
 # Exits with a non-zero code if at least one commit fails verification.
 # Note that bzr revisions are branch-based while git hashes are global.
 
-# Expects (git hash, bzr revision) pairs on stdin. For example:
+# Expects (bzr revision number, git hash) pairs on stdin. For example:
 # 14000 d2167ca720605f7b857c8ff75f1c5ecfe8c9823e
 
 # a requred path to a checked out bzr branch:
@@ -15,19 +15,19 @@ git_root="$2"
 
 result=0
 
-while read rev sha
+while read revno hash
 do
     cd $git_root
-    git checkout --quiet --detach $sha
+    git checkout --quiet --detach $hash
     cd - > /dev/null
 
     cd $bzr_root
-    bzr update --quiet -r${rev}
+    bzr update --quiet -r${revno}
     cd - > /dev/null
 
     if ! diff -ur -x '.git' -x '.bzr' $bzr_root $git_root
     then
-        echo "ERROR: bzr r${rev} differs from git $sha"
+        echo "ERROR: bzr r${revno} differs from git $hash"
         result=1
     fi
 done
