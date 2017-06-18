@@ -85,6 +85,28 @@ initRepository()
         echo "Expecting no git repository when importing master; found: $git_root"
         exit 1
     fi
+
+    if [ -e marks.bzr ]
+    then
+        state="$state marks.bzr"
+    fi
+
+    if [ -e bzr2git4notes.bin ]
+    then
+        state="$state bzr2git4notes.bin"
+    fi
+
+    if [ -e marks.git ]
+    then
+        state="$state marks.git"
+    fi
+
+    if [ -n "$state" ]
+    then
+        echo "Expecting no old state files when importing master; found: $state"
+        exit 1
+    fi
+
     mkdir $git_root
     git init $git_root
 }
