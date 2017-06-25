@@ -22,9 +22,8 @@ do
     export git_branch=`basename $git_path`
 
     cd $bzr_path
-    bzr log -n0 |
-        egrep '^ *revno: [0-9.]*( *.merge.)?$' |
-        sed -r 's/.*revno: *| *.merge.//g' |
+    bzr log --line |
+        awk -F: '{ gsub(/^ +/, "", $1); print $1 }' |
         sort > /tmp/bzr.log
     cd - > /dev/null
 
