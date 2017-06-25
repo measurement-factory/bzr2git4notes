@@ -11,6 +11,17 @@
 compare_revs=`dirname $0`/compare_revs.sh
 
 result=0
+#  whether compare only 'plain' revisions, skipping
+# 'dotted' revisions from merged branches
+plain=0
+
+if [ $plain -eq 0 ]
+then
+    bzr_arg="-n0"
+    git_arg='{ if ($4==git_branch) {print $2, $4, substr($5,2)} }'
+else
+    git_arg='{ if ($4==git_branch && $5!~/[0-9]+\.[0-9]+\.[0-9]+/) {print $2, $4, substr($5,2)} }'
+fi
 
 while read bzr_path git_path
 do
@@ -22,16 +33,15 @@ do
     export git_branch=`basename $git_path`
 
     cd $bzr_path
-    bzr log --line |
+    bzr log --line $bzr_arg |
         awk -F: '{ gsub(/^ +/, "", $1); print $1 }' |
         sort > /tmp/bzr.log
     cd - > /dev/null
 
     cd $git_root
     git log $git_branch |
-        egrep '^(commit | *Bzr-Reference:)' |
-        paste --delimiters=' ' - - |
-        sed -r "s/commit *|Bzr-Reference: *//g;s/  *$git_branch r/ $git_branch /" |
+        egrep '^(commit | *Bzr-Reference:)' | paste --delimiters=' ' - - |
+        awk -v git_branch="$git_branch" "$git_arg"  |
         sort --key 3,3 > /tmp/git.log
     cd - > /dev/null
 
