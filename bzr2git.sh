@@ -137,11 +137,12 @@ else
     mustExist bzr2git4notes.bin
     mustExist marks.git
 
-    bzr fast-export --no-plain --import-marks=./marks.bzr -b $git_branch $source |
-        $converter --restore-context --git-export-file=./marks.git |
+    bzr fast-export --no-plain --import-marks=./marks.bzr --export-marks=./marks_.bzr -b $git_branch $source |
+        $converter --restore-context --store-context --git-export-file=./marks.git |
         git fast-import --import-marks=./marks.git --export-marks=./marks_.git
     ret=$?
     mv ./marks_.git ./marks.git
+    mv ./marks_.bzr ./marks.bzr
 fi
 
 exit $ret
