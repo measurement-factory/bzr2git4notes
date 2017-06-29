@@ -120,15 +120,24 @@ mustExist()
     fi
 }
 
+checkGitBranch()
+{
+    if ! git show-branch $git_branch > /dev/null 2>&1
+    then
+        echo Warning: git branch \'$git_branch\' not created!
+    fi
+}
+
 ret=0
 if [ $git_branch = 'master' ]
 then
     initRepository
-    bzr fast-export --no-plain --export-marks=./marks.bzr $source |
+    bzr fast-export --quiet --no-plain --export-marks=./marks.bzr $source |
         $converter --store-context |
-        git fast-import --export-marks=./marks.git
+        git fast-import --quiet --export-marks=./marks.git
     ret=$?
 
+    checkGitBranch
     mustExist marks.bzr
     mustExist bzr2git4notes.bin
     mustExist marks.git
@@ -137,10 +146,12 @@ else
     mustExist bzr2git4notes.bin
     mustExist marks.git
 
-    bzr fast-export --no-plain --import-marks=./marks.bzr --export-marks=./marks_.bzr -b $git_branch $source |
+    bzr fast-export --quiet --no-plain --import-marks=./marks.bzr --export-marks=./marks_.bzr -b $git_branch $source |
         $converter --restore-context --store-context --git-export-file=./marks.git |
-        git fast-import --import-marks=./marks.git --export-marks=./marks_.git
+        git fast-import --quiet --import-marks=./marks.git --export-marks=./marks_.git
     ret=$?
+
+    checkGitBranch
     mv ./marks_.git ./marks.git
     mv ./marks_.bzr ./marks.bzr
 fi
