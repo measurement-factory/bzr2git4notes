@@ -95,10 +95,17 @@ namespace Bzr2Git4Notes
     [Serializable]
     class Tag
     {
+        public Tag()
+        {
+            fromId = -1;
+            skip = false;
+        }
         // the parsed tag_name from 'reset refs/tags/tag_name' command
         public string name;
         // the fromId from 'from :fromId' command, related to this tag
         public int fromId;
+        // Whether do not include this tag into output(as belonging to a different branch).
+        public bool skip;
     }
 
     [Serializable]
@@ -371,6 +378,7 @@ namespace Bzr2Git4Notes
             branchNameDict = new SortedDictionary<string, int>();
             deletedFileLines = new SortedDictionary<string, string>();
             renames = new Renames();
+            parseTagsFile();
         }
         #region === public methods ===
         public void Adapt(string inputFname, string outputFname)
@@ -420,8 +428,15 @@ namespace Bzr2Git4Notes
                 Commit commit = null;
                 Tag tag = null;
                 string s = null;
+                bool skipBlankLine = false;
                 while ((s = inputStream.ReadLine()) != null)
                 {
+                    if (skipBlankLine)
+                    {
+                        skipBlankLine = false;
+                        if (string.IsNullOrEmpty(s))
+                            continue;
+                    }
                     if (s.StartsWith("feature "))
                     {
                         // skip branch-specific
@@ -437,6 +452,13 @@ namespace Bzr2Git4Notes
                         {
                             tag = new Tag();
                             tag.name = s.Substring(("reset refs/tags/").Length);
+                            if (requiredTags != null && !requiredTags.Contains(tag.name))
+                            {
+                                tag.skip = true;
+                                skipBlankLine = true;
+                                LogWriter.Log(String.Format("Skipping tag {0}", tag.name));
+                                continue;
+                            }
                         }
                         WriteLine(s);
                     }
@@ -484,6 +506,11 @@ namespace Bzr2Git4Notes
                         var fromCommit = StoreList[id - 1];
                         if (tag != null)
                         {
+                            if (tag.skip)
+                            {
+                                skipBlankLine = true;
+                                continue;
+                            }
                             tag.fromId = id;
                             fromCommit.tags.Add(tag);
                             tag = null;
@@ -837,6 +864,20 @@ namespace Bzr2Git4Notes
             StoreList.Add(commit);
         }
 
+        void parseTagsFile()
+        {
+            if (!string.IsNullOrEmpty(MainClass.TagsFile))
+            {
+                requiredTags = new List<string>();
+                var lines = File.ReadLines(MainClass.TagsFile);
+                foreach (var l in lines)
+                {
+                    if (!string.IsNullOrEmpty(l))
+                        requiredTags.Add(l.Trim());
+                }
+            }
+        }
+
         #region === private and static data ===
         private static HashSet<string> dirs = new HashSet<string>();
         static readonly byte[] Newline = System.Text.UTF8Encoding.Default.GetBytes("\n");
@@ -862,6 +903,9 @@ namespace Bzr2Git4Notes
 
         Renames renames;
 
+        // We need to import only these, branch-specific tags.
+        List<string> requiredTags;
+
         int RestoredCount;
         #endregion
     }
@@ -886,6 +930,9 @@ namespace Bzr2Git4Notes
         // 3. The last imported note mark id in the ":id" format (can be taken
         //    from previously generated git marks file).
         public static string LastNoteId;
+        // A text file with tag name list, required for current branch.
+        // All other tags will be skipped.
+        public static string TagsFile;
 
         public static string AssemblyName
         {
@@ -910,6 +957,8 @@ namespace Bzr2Git4Notes
                     Logging = true;
                 else if (option.StartsWith("--last-note-id="))
                     LastNoteId = option.Substring("--last-note-id=".Length);
+                else if (option.StartsWith("--tags-file="))
+                    TagsFile = option.Substring("--tags-file=".Length);
                 else
                     throw new Exception(String.Format("Unknown option {0}", option));
             }
