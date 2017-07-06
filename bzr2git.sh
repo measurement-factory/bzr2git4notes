@@ -56,7 +56,7 @@ export git_root=`dirname $destination`
 export git_branch=`basename $destination`
 
 # the full tags list in csv format, should be in the current directory
-all_tags=./export-import-tags.csv
+all_tags=./export-import-tags.txt
 # all branch-specific tags will be placed here
 branch_tags=./tags_${git_branch}.txt
 
@@ -79,6 +79,13 @@ if [ -d "$git_root" -a ! -d "$git_root/.git" ]
 then
     usage
     echo "Expecting $destination to start with a git repository directory name but $git_root is not it"
+    exit 1
+fi
+
+if [ ! -s "$all_tags" ]
+then
+    usage
+    echo "Expecting non-empty $all_tags"
     exit 1
 fi
 
