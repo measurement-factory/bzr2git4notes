@@ -305,12 +305,25 @@ namespace Bzr2Git4Notes
 
         public string Notes(int noteMark, string noteCommitId, string lastImportNoteId)
         {
+            StringBuilder messageBuilder = new StringBuilder();
+            for (int i = 1; i < authors.Count; ++i)
+                messageBuilder.Append(String.Format("Co-Authored-By: {0}\n", authors[i]));
+            if (!String.IsNullOrEmpty(bug))
+                messageBuilder.Append(String.Format("Fixes: {0}\n", bug));
+            if (!string.IsNullOrEmpty(noteCommitId))
+                messageBuilder.Append(String.Format("Bzr-Reference: {0}\n", noteCommitId));
+            if (messageBuilder.Length == 0)
+                return null;
+
             StringBuilder builder = new StringBuilder();
             builder.Append(String.Format("commit refs/notes/{0}\n", MainClass.NoteNS));
             builder.Append(string.Format("mark :{0}\n", noteMark));
             builder.Append(String.Format("committer {0} <{0}@example.com> {1} {2}\n",
                                          MainClass.AssemblyName, FormatHelper.SecondsSinceEpoch, FormatHelper.timeZoneOffset));
-            string notesCommitMessage = String.Format("auto-generated git notes from bzr metadata ({0})", noteCommitId);
+            string notesCommitMessage = "auto-generated git notes from bzr metadata";
+            if (!string.IsNullOrEmpty(noteCommitId))
+                notesCommitMessage += String.Format(" ({0})", noteCommitId);
+
             builder.Append(String.Format("data {0}\n", notesCommitMessage.Length));
             builder.Append(notesCommitMessage);
             builder.Append("\n");
@@ -318,12 +331,7 @@ namespace Bzr2Git4Notes
                 builder.Append(String.Format("from {0}\n", lastImportNoteId));
             builder.Append(String.Format("N inline :{0}\n", markId));
 
-            StringBuilder messageBuilder = new StringBuilder();
-            for (int i = 1; i < authors.Count; ++i)
-                messageBuilder.Append(String.Format("Co-Authored-By: {0}\n", authors[i]));
-            if (!String.IsNullOrEmpty(bug))
-                messageBuilder.Append(String.Format("Fixes: {0}\n", bug));
-            messageBuilder.Append(String.Format("Bzr-Reference: {0}\n", noteCommitId));
+
 
             int messageLength = System.Text.UTF8Encoding.Default.GetByteCount(messageBuilder.ToString());
             builder.Append(String.Format("data {0}\n", messageLength));
@@ -339,6 +347,8 @@ namespace Bzr2Git4Notes
         {
             get
             {
+                if (MainClass.OnlyPlainRevs && revision.Contains("."))
+                    return null;
                 string bzrRef = String.Format("{0} r{1}", gitBranchName, revision);
                 if (revision.Contains("."))
                     bzrRef = String.Format("{0} from {1}", bzrRef, theBranchName.nick);
@@ -635,9 +645,13 @@ namespace Bzr2Git4Notes
             for (int i = start; i < StoreList.Count; ++i)
             {
                 var commit = StoreList[i];
-                WriteLine(commit.Notes(markId, commit.bzrReference, attachtoPrevNotes ? MainClass.LastNoteId : ""));
-                attachtoPrevNotes = false;
-                markId++;
+                var notes = commit.Notes(markId, commit.bzrReference, attachtoPrevNotes ? MainClass.LastNoteId : "");
+                if (!string.IsNullOrEmpty(notes))
+                {
+                    WriteLine(notes);
+                    attachtoPrevNotes = false;
+                    markId++;
+                }
             }
         }
         #endregion
@@ -933,6 +947,7 @@ namespace Bzr2Git4Notes
         // A text file with tag name list, required for current branch.
         // All other tags will be skipped.
         public static string TagsFile;
+        public static bool OnlyPlainRevs = false;
 
         public static string AssemblyName
         {
@@ -959,6 +974,8 @@ namespace Bzr2Git4Notes
                     LastNoteId = option.Substring("--last-note-id=".Length);
                 else if (option.StartsWith("--tags-file="))
                     TagsFile = option.Substring("--tags-file=".Length);
+                else if (option.StartsWith("--only-plain-revs"))
+                    OnlyPlainRevs = true;
                 else
                     throw new Exception(String.Format("Unknown option {0}", option));
             }
